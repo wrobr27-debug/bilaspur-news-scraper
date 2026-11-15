@@ -1,0 +1,514 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Bilaspur News Scraper — Monitor</title>
+<style>
+  /* ---------- design tokens ---------- */
+  :root {
+    --bg:            #0f1115;
+    --surface:       #171a21;
+    --surface-2:     #1e222b;
+    --border:        #2a2f3a;
+    --border-soft:   #222732;
+    --text:          #e6e9ef;
+    --text-dim:      #9aa3b2;
+    --text-faint:    #6b7484;
+    --accent:        #4a9eff;
+    --accent-soft:   rgba(74, 158, 255, .12);
+    --high:          #3fb950;
+    --medium:        #d29922;
+    --low:           #6b7484;
+    --sensitive:     #f85149;
+    --radius:        10px;
+    --mono: ui-monospace, "SF Mono", "Cascadia Mono", Menlo, Consolas, monospace;
+    --sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
+            "Noto Sans Devanagari", "Nirmala UI", system-ui, sans-serif;
+  }
+
+  * { box-sizing: border-box; }
+
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--sans);
+    font-size: 14px;
+    line-height: 1.5;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  /* ---------- header ---------- */
+  header {
+    position: sticky; top: 0; z-index: 20;
+    display: flex; align-items: center; gap: 16px;
+    padding: 14px 24px;
+    background: rgba(15, 17, 21, .92);
+    backdrop-filter: blur(8px);
+    border-bottom: 1px solid var(--border);
+  }
+  .brand { display: flex; align-items: baseline; gap: 10px; }
+  .brand h1 { margin: 0; font-size: 15px; font-weight: 650; letter-spacing: -.01em; }
+  .brand span { font-size: 12px; color: var(--text-faint); }
+  .spacer { flex: 1; }
+
+  .status {
+    display: inline-flex; align-items: center; gap: 7px;
+    font-size: 12px; color: var(--text-dim);
+    padding: 5px 11px; border: 1px solid var(--border);
+    border-radius: 999px; background: var(--surface);
+  }
+  .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--high); }
+  .dot.stale { background: var(--medium); }
+  .dot.off  { background: var(--sensitive); }
+
+  .btn {
+    font: inherit; font-size: 12px;
+    color: var(--text-dim); background: var(--surface);
+    border: 1px solid var(--border); border-radius: 7px;
+    padding: 6px 12px; cursor: pointer;
+    transition: background .12s, color .12s, border-color .12s;
+  }
+  .btn:hover { background: var(--surface-2); color: var(--text); border-color: #39404e; }
+  .btn.on { background: var(--accent-soft); color: var(--accent); border-color: rgba(74,158,255,.35); }
+
+  /* ---------- layout ---------- */
+  main { padding: 22px 24px 60px; max-width: 1500px; margin: 0 auto; }
+
+  .cards {
+    display: grid; gap: 12px; margin-bottom: 22px;
+    grid-template-columns: repeat(auto-fit, minmax(168px, 1fr));
+  }
+  .card {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: var(--radius); padding: 14px 16px;
+  }
+  .card .label {
+    font-size: 11px; text-transform: uppercase; letter-spacing: .06em;
+    color: var(--text-faint); margin-bottom: 7px;
+  }
+  .card .value { font-size: 26px; font-weight: 640; letter-spacing: -.02em; font-variant-numeric: tabular-nums; }
+  .card .sub { font-size: 11.5px; color: var(--text-dim); margin-top: 3px; }
+
+  .grid { display: grid; grid-template-columns: minmax(0, 1fr) 330px; gap: 18px; align-items: start; }
+  @media (max-width: 1080px) { .grid { grid-template-columns: 1fr; } }
+
+  .panel {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: var(--radius); overflow: hidden;
+  }
+  .panel > h2 {
+    margin: 0; padding: 12px 16px;
+    font-size: 12px; font-weight: 620; text-transform: uppercase;
+    letter-spacing: .06em; color: var(--text-dim);
+    border-bottom: 1px solid var(--border-soft);
+    display: flex; align-items: center; gap: 9px;
+  }
+  .panel > h2 .count {
+    font-weight: 500; text-transform: none; letter-spacing: 0;
+    color: var(--text-faint); font-size: 11.5px;
+  }
+
+  /* ---------- filters ---------- */
+  .filters {
+    display: flex; flex-wrap: wrap; gap: 8px; align-items: center;
+    padding: 12px 16px; border-bottom: 1px solid var(--border-soft);
+  }
+  .filters input, .filters select {
+    font: inherit; font-size: 12.5px;
+    color: var(--text); background: var(--surface-2);
+    border: 1px solid var(--border); border-radius: 7px;
+    padding: 6px 10px; outline: none;
+  }
+  .filters input:focus, .filters select:focus { border-color: var(--accent); }
+  .filters input { min-width: 210px; flex: 1 1 210px; }
+  .filters select { cursor: pointer; }
+
+  /* ---------- article list ---------- */
+  .article {
+    padding: 13px 16px; border-bottom: 1px solid var(--border-soft);
+    cursor: pointer; transition: background .12s;
+  }
+  .article:last-child { border-bottom: none; }
+  .article:hover { background: var(--surface-2); }
+  .article.open { background: var(--surface-2); }
+
+  .a-head { display: flex; align-items: flex-start; gap: 10px; }
+  .a-title { flex: 1; font-size: 14px; font-weight: 560; line-height: 1.42; }
+  .a-excerpt {
+    color: var(--text-dim); font-size: 12.5px; margin-top: 5px;
+    display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical;
+    overflow: hidden;
+  }
+  .a-meta {
+    display: flex; flex-wrap: wrap; gap: 6px 12px; align-items: center;
+    margin-top: 8px; font-size: 11.5px; color: var(--text-faint);
+  }
+  .a-meta .src { color: var(--text-dim); }
+
+  .tag {
+    display: inline-block; font-size: 10.5px; font-weight: 600;
+    letter-spacing: .03em; padding: 2px 7px; border-radius: 5px;
+    border: 1px solid transparent; white-space: nowrap;
+  }
+  .tag.high     { color: var(--high);     background: rgba(63,185,80,.12);  border-color: rgba(63,185,80,.3); }
+  .tag.medium   { color: var(--medium);   background: rgba(210,153,34,.12); border-color: rgba(210,153,34,.3); }
+  .tag.low      { color: var(--low);      background: rgba(107,116,132,.12); border-color: rgba(107,116,132,.3); }
+  .tag.sens     { color: var(--sensitive); background: rgba(248,81,73,.12);  border-color: rgba(248,81,73,.3); }
+  .tag.plain    { color: var(--text-dim); background: var(--surface-2);      border-color: var(--border); }
+
+  /* ---------- detail ---------- */
+  .detail { padding: 16px; border-bottom: 1px solid var(--border-soft); background: var(--surface-2); }
+  .detail h3 { margin: 0 0 9px; font-size: 15px; line-height: 1.45; font-weight: 620; }
+  .detail .body {
+    white-space: pre-wrap; font-size: 13px; line-height: 1.68;
+    color: var(--text-dim); max-height: 340px; overflow-y: auto;
+    padding-right: 6px;
+  }
+  .detail .reason {
+    font-size: 11.5px; color: var(--text-faint); margin: 10px 0 0;
+    padding-top: 9px; border-top: 1px dashed var(--border);
+  }
+  .detail a { color: var(--accent); text-decoration: none; }
+  .detail a:hover { text-decoration: underline; }
+
+  /* ---------- side tables ---------- */
+  .row {
+    display: flex; align-items: center; gap: 10px;
+    padding: 9px 14px; border-bottom: 1px solid var(--border-soft);
+    font-size: 12.5px;
+  }
+  .row:last-child { border-bottom: none; }
+  .row .name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .row .num { color: var(--text-dim); font-variant-numeric: tabular-nums; font-family: var(--mono); font-size: 11.5px; }
+  .row .state {
+    font-family: var(--mono); font-size: 10.5px; color: var(--text-faint);
+    padding: 1px 6px; border: 1px solid var(--border); border-radius: 4px;
+  }
+  .row .state.enabled { color: var(--high); border-color: rgba(63,185,80,.35); }
+  .row .state.disabled { color: var(--medium); border-color: rgba(210,153,34,.35); }
+  .row .state.rejected { color: var(--sensitive); border-color: rgba(248,81,73,.3); }
+
+  .bar { height: 4px; border-radius: 2px; background: var(--accent); margin-top: 2px; }
+  .barwrap { width: 68px; }
+
+  .run {
+    padding: 9px 14px; border-bottom: 1px solid var(--border-soft);
+    font-size: 12px; display: flex; flex-direction: column; gap: 3px;
+  }
+  .run:last-child { border-bottom: none; }
+  .run .rid { font-family: var(--mono); font-size: 10.5px; color: var(--text-faint); }
+  .run .rtot { font-family: var(--mono); font-size: 11px; color: var(--text-dim); }
+
+  .empty { padding: 34px 16px; text-align: center; color: var(--text-faint); font-size: 13px; }
+  .muted { color: var(--text-faint); }
+  .error { color: var(--sensitive); }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="brand">
+    <h1>Bilaspur News Scraper</h1>
+    <span>monitor</span>
+  </div>
+  <div class="spacer"></div>
+  <div class="status"><span class="dot" id="dot"></span><span id="statusText">connecting…</span></div>
+  <button class="btn" id="refreshBtn">Refresh</button>
+  <button class="btn on" id="autoBtn">Auto</button>
+</header>
+
+<main>
+  <div class="cards" id="cards"></div>
+
+  <div class="grid">
+    <div class="panel">
+      <h2>Articles <span class="count" id="artCount"></span></h2>
+      <div class="filters">
+        <input id="q" type="search" placeholder="Search title or body…" autocomplete="off">
+        <select id="sourceFilter"><option value="">All sources</option></select>
+        <select id="relevanceFilter">
+          <option value="">All relevance</option>
+          <option value="high">high</option>
+          <option value="medium">medium</option>
+          <option value="low">low</option>
+          <option value="unknown">unknown</option>
+        </select>
+        <select id="sensitiveFilter">
+          <option value="">All</option>
+          <option value="1">Sensitive only</option>
+          <option value="0">Not sensitive</option>
+        </select>
+      </div>
+      <div id="articleList"></div>
+    </div>
+
+    <div>
+      <div class="panel" style="margin-bottom:18px">
+        <h2>Sources <span class="count" id="srcCount"></span></h2>
+        <div id="sourceList"></div>
+      </div>
+      <div class="panel">
+        <h2>Recent runs</h2>
+        <div id="runList"></div>
+      </div>
+    </div>
+  </div>
+</main>
+
+<script>
+"use strict";
+
+const $ = (id) => document.getElementById(id);
+const ESCAPES = {
+  '&': '&',
+  '<': '<',
+  '>': '>',
+  '"': '"',
+  '\'': '\'',
+};
+const esc = (s) => String(s ?? '').replace(
+  /[&<>"\']/g, (c) => ESCAPES[c]);
+
+let autoTimer = null;
+let openId = null;
+let lastSummary = null;
+
+/* ---------------- data ---------------- */
+
+async function api(path) {
+  const r = await fetch(path, { cache: "no-store" });
+  if (!r.ok) throw new Error(r.status + " " + r.statusText);
+  return r.json();
+}
+
+function articleQuery() {
+  const p = new URLSearchParams();
+  const q = $("q").value.trim();
+  if (q) p.set("q", q);
+  if ($("sourceFilter").value) p.set("source", $("sourceFilter").value);
+  if ($("relevanceFilter").value) p.set("relevance", $("relevanceFilter").value);
+  if ($("sensitiveFilter").value) p.set("sensitive", $("sensitiveFilter").value);
+  p.set("limit", "100");
+  return p.toString();
+}
+
+/* ---------------- rendering ---------------- */
+
+function renderSummary(s) {
+  lastSummary = s;
+  const cards = [
+    ["Articles", s.articles, `${s.sources_enabled} of ${s.sources_total} sources enabled`],
+    ["Sources enabled", s.sources_enabled, Object.entries(s.sources_by_state)
+      .map(([k, v]) => `${v} ${k}`).join(" · ")],
+    ["Sensitive", s.sensitive, "flagged for review"],
+    ["Runs", s.runs, `${s.verifications} verification records`],
+  ];
+  $("cards").innerHTML = cards.map(([label, value, sub]) => `
+    <div class="card">
+      <div class="label">${esc(label)}</div>
+      <div class="value">${esc(value)}</div>
+      <div class="sub">${esc(sub)}</div>
+    </div>`).join("");
+
+  const last = (s.last_run && s.last_run[0]) || null;
+  if (last) {
+    const t = last.totals || {};
+    $("statusText").textContent =
+      `last run ${last.mode} · ${t.written ?? 0} written · ${t.extracted ?? 0} extracted`;
+  } else {
+    $("statusText").textContent = "no runs yet";
+  }
+}
+
+function renderArticles(data) {
+  $("artCount").textContent = data.total + " total";
+  const list = $("articleList");
+  if (!data.articles.length) {
+    list.innerHTML = `<div class="empty">No articles match these filters.</div>`;
+    return;
+  }
+  list.innerHTML = data.articles.map((a) => {
+    const rel = (a.bilaspur_relevance || "unknown").toLowerCase();
+    const sens = a.sensitive
+      ? `<span class="tag sens">sensitive</span>` : "";
+    const date = a.published_date || a.published_at || "no date";
+    return `
+      <div class="article ${a.article_id === openId ? "open" : ""}" data-id="${a.article_id}">
+        <div class="a-head">
+          <div class="a-title">${esc(a.title || "(untitled)")}</div>
+          <span class="tag ${esc(rel)}">${esc(rel)}</span>
+        </div>
+        <div class="a-excerpt">${esc(a.excerpt || "")}</div>
+        <div class="a-meta">
+          <span class="src">${esc(a.source_name || a.source_id)}</span>
+          <span>${esc(date)}</span>
+          <span>${esc(a.language || "und")}</span>
+          <span>${a.content_chars || 0} chars</span>
+          <span>${esc(a.extraction_method || "")}</span>
+          ${sens}
+        </div>
+      </div>`;
+  }).join("");
+
+  list.querySelectorAll(".article").forEach((el) => {
+    el.addEventListener("click", () => toggleDetail(Number(el.dataset.id), el));
+  });
+
+  // The auto-refresh re-renders this list, which destroys any open detail
+  // panel. Re-open the one the user was reading so the panel survives.
+  if (openId !== null) {
+    const el = list.querySelector(`.article[data-id="${openId}"]`);
+    if (el) {
+      openDetail(openId, el);
+    } else {
+      openId = null;
+    }
+  }
+}
+
+async function toggleDetail(id, el) {
+  if (openId === id) {
+    closeDetail(el);
+    return;
+  }
+  document.querySelectorAll(".detail").forEach((d) => d.remove());
+  document.querySelectorAll(".article.open").forEach((a) => a.classList.remove("open"));
+  openId = id;
+  await openDetail(id, el);
+}
+
+function closeDetail(el) {
+  el.classList.remove("open");
+  const old = el.querySelector(".detail");
+  if (old) old.remove();
+  openId = null;
+}
+
+async function openDetail(id, el) {
+  el.classList.add("open");
+
+  const detail = document.createElement("div");
+  detail.className = "detail";
+  detail.innerHTML = `<div class="muted">loading…</div>`;
+  el.appendChild(detail);
+
+  try {
+    const a = await api("/api/article/" + id);
+    detail.innerHTML = `
+      <h3>${esc(a.title || "")}</h3>
+      <div class="body">${esc(a.content_text || "(empty)")}</div>
+      <p class="reason">
+        Relevance <strong>${esc(a.bilaspur_relevance)}</strong> —
+        ${esc(a.relevance_reason || "n/a")}
+        ${a.matched_terms ? `<br>Matched: ${esc(a.matched_terms)}` : ""}
+        ${a.published_at_original ? `<br>Publisher date: ${esc(a.published_at_original)}` : ""}
+        ${a.source_verification_status ? `<br>Source status: ${esc(a.source_verification_status)}` : ""}
+        ${a.revisions && a.revisions.length ? `<br>Revisions: ${a.revisions.length}` : ""}
+        <br><a href="${esc(a.canonical_url)}" target="_blank" rel="noopener">Open original ↗</a>
+      </p>`;
+  } catch (e) {
+    detail.innerHTML = `<div class="error">Could not load: ${esc(e.message)}</div>`;
+  }
+}
+
+function renderSources(list) {
+  $("srcCount").textContent = list.length + " total";
+  const sorted = [...list].sort((a, b) =>
+    (b.article_count || 0) - (a.article_count || 0));
+  const max = Math.max(1, ...sorted.map((s) => s.article_count || 0));
+
+  $("sourceList").innerHTML = sorted.map((s) => {
+    const st = s.lifecycle_state || "unknown";
+    const n = s.article_count || 0;
+    return `
+      <div class="row">
+        <span class="name" title="${esc(s.source_name)}">${esc(s.source_name)}</span>
+        ${n ? `<span class="barwrap"><span class="bar" style="width:${Math.round((n / max) * 100)}%"></span></span>` : ""}
+        <span class="num">${n}</span>
+        <span class="state ${esc(st)}">${esc(st)}</span>
+      </div>`;
+  }).join("");
+
+  const sel = $("sourceFilter");
+  const current = sel.value;
+  const opts = list
+    .filter((s) => (s.article_count || 0) > 0)
+    .sort((a, b) => (b.article_count || 0) - (a.article_count || 0))
+    .map((s) => `<option value="${esc(s.source_id)}">${esc(s.source_name)} (${s.article_count})</option>`)
+    .join("");
+  sel.innerHTML = `<option value="">All sources</option>` + opts;
+  sel.value = current;
+}
+
+function renderRuns(list) {
+  if (!list.length) {
+    $("runList").innerHTML = `<div class="empty">No runs recorded.</div>`;
+    return;
+  }
+  $("runList").innerHTML = list.map((r) => {
+    const t = r.totals || {};
+    return `
+      <div class="run">
+        <div class="rid">${esc(r.run_id)}</div>
+        <div class="rtot">${esc(r.mode)} · ${t.written ?? 0} written ·
+          ${t.updated ?? 0} updated · ${t.extracted ?? 0} extracted ·
+          ${t.failures ?? 0} failed</div>
+        <div class="rid">${esc(r.started_at || "")}</div>
+      </div>`;
+  }).join("");
+}
+
+/* ---------------- orchestration ---------------- */
+
+async function refresh() {
+  try {
+    const [sum, arts, srcs, rns] = await Promise.all([
+      api("/api/summary"),
+      api("/api/articles?" + articleQuery()),
+      api("/api/sources"),
+      api("/api/runs?limit=12"),
+    ]);
+    renderSummary(sum);
+    renderArticles(arts);
+    renderSources(srcs.sources || []);
+    renderRuns(rns.runs || []);
+    $("dot").className = "dot";
+    $("dot").title = "connected";
+  } catch (e) {
+    $("dot").className = "dot off";
+    $("statusText").textContent = "server unreachable";
+    $("statusText").classList.add("error");
+  }
+}
+
+let debounce = null;
+$("q").addEventListener("input", () => {
+  clearTimeout(debounce);
+  debounce = setTimeout(async () => {
+    renderArticles(await api("/api/articles?" + articleQuery()));
+  }, 220);
+});
+["sourceFilter", "relevanceFilter", "sensitiveFilter"].forEach((id) => {
+  $(id).addEventListener("change", async () => {
+    renderArticles(await api("/api/articles?" + articleQuery()));
+  });
+});
+
+$("refreshBtn").addEventListener("click", refresh);
+$("autoBtn").addEventListener("click", () => {
+  if (autoTimer) {
+    clearInterval(autoTimer); autoTimer = null;
+    $("autoBtn").classList.remove("on");
+  } else {
+    autoTimer = setInterval(refresh, 15000);
+    $("autoBtn").classList.add("on");
+  }
+});
+
+refresh();
+autoTimer = setInterval(refresh, 15000);
+</script>
+</body>
+</html>

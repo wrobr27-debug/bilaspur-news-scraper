@@ -119,7 +119,23 @@ python -m bilaspur_scraper.main health
   against a JS-rendered localhost site (HTTP sees 0 items, the browser sees
   3, and the Hindi text is stored verbatim).
 
+## Dashboard (read-only monitor)
+
+```powershell
+python scripts/dashboard_server.py --port 8766
+```
+
+Then open <http://127.0.0.1:8766>. It shows the collected articles with their
+original text, relevance verdicts and sensitive-topic flags, plus the source
+registry, per-source health and the run ledger. Search and filter by source,
+relevance or sensitive topic; click an article to read the full body.
+
+**The dashboard is strictly read-only.** It opens the database with
+`mode=ro`, so SQLite refuses any write, and it never runs a collection —
+triggering a crawl stays a deliberate CLI action. An open dashboard tab
+therefore cannot cause outbound traffic to any publisher.
+
 ## Not in v1 (deliberately)
 
-No dashboard, no AI summarization, no social media collection, no publishing,
+No AI summarization, no social media collection, no publishing,
 no scheduler. Browser crawling only with per-source explicit approval (D10).

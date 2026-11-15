@@ -24,3 +24,6 @@ data/endpoints.json
 data/sitemap_probe.json
 data/ua_matrix.json
 data/discovery.json
+data/youtube_search.json
+data/youtube_channels.json
+data/social_accounts.json

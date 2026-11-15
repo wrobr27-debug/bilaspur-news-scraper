@@ -1,3 +1,4 @@
+from .media_models import MediaTranscript, SocialAccount, SocialVideo
 from .models import (
     Article,
     ArticleRelation,
@@ -38,7 +39,10 @@ __all__ = [
     "IngestionRun",
     "KeywordGroup",
     "KeywordGroupRepository",
+    "MediaTranscript",
     "RunRepository",
+    "SocialAccount",
+    "SocialVideo",
     "Source",
     "SourceAlias",
     "SourceHealth",

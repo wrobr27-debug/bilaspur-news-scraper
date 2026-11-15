@@ -50,6 +50,8 @@ def make_session_factory(engine: Engine) -> sessionmaker[Session]:
 
 
 def create_schema(engine: Engine) -> None:
+    # Import the media models so their tables join the metadata.
+    from . import media_models  # noqa: F401
     from .models import Base
 
     Base.metadata.create_all(engine)

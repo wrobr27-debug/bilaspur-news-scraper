@@ -197,6 +197,51 @@ def runs(conn: sqlite3.Connection, limit: int = 30) -> list[dict]:
     return rows
 
 
+def media_transcripts(conn: sqlite3.Connection, limit: int = 50) -> list[dict]:
+    """Video transcripts and the articles generated from them.
+
+    The generated article lives in `notes` next to the fact-check result,
+    so the transcript and the article are always read together.
+    """
+    tables = {r[0] for r in conn.execute(
+        "SELECT name FROM sqlite_master WHERE type='table'")}
+    if "media_transcripts" not in tables or "social_videos" not in tables:
+        return []
+    rows = _rows(conn.execute(
+        "SELECT t.id, t.method, t.language, t.char_count, t.segment_count, "
+        "       t.model_name, t.created_at, t.notes, t.text, "
+        "       v.video_id, v.url AS video_url, v.title, "
+        "       a.account_name, a.channel_id, a.profile_url "
+        "FROM media_transcripts t "
+        "JOIN social_videos v ON v.id = t.video_pk "
+        "LEFT JOIN social_accounts a ON a.account_id = v.account_id "
+        "ORDER BY t.id DESC LIMIT ?", (limit,)))
+    for row in rows:
+        payload = {}
+        if row.get("notes"):
+            try:
+                payload = json.loads(row["notes"])
+            except (json.JSONDecodeError, TypeError):
+                payload = {}
+        row["article"] = payload.get("article")
+        row["fact_check"] = payload.get("fact_check")
+        row["transcript_text"] = row.pop("text", None)
+        row.pop("notes", None)
+    return rows
+
+
+def social_accounts(conn: sqlite3.Connection) -> list[dict]:
+    tables = {r[0] for r in conn.execute(
+        "SELECT name FROM sqlite_master WHERE type='table'")}
+    if "social_accounts" not in tables:
+        return []
+    return _rows(conn.execute(
+        "SELECT account_id, platform, account_name, handle, profile_url, "
+        "       channel_id, account_type, verification_status, relevance, "
+        "       subscribers, video_count, collectable_via, discovery_method "
+        "FROM social_accounts ORDER BY platform, account_name"))
+
+
 # --------------------------------------------------------------------------
 # HTTP layer
 # --------------------------------------------------------------------------
@@ -247,6 +292,13 @@ class DashboardHandler(BaseHTTPRequestHandler):
             limit = min(int(query.get("limit", ["30"])[0] or 30), 200)
             with _connect(self.db_path) as conn:
                 return self._send_json({"runs": runs(conn, limit)})
+        if route == "/api/transcripts":
+            limit = min(int(query.get("limit", ["50"])[0] or 50), 200)
+            with _connect(self.db_path) as conn:
+                return self._send_json({"transcripts": media_transcripts(conn, limit)})
+        if route == "/api/social-accounts":
+            with _connect(self.db_path) as conn:
+                return self._send_json({"accounts": social_accounts(conn)})
         if route.startswith("/api/article/"):
             try:
                 article_id = int(route.rsplit("/", 1)[1])

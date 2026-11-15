@@ -93,6 +93,79 @@
 
   .grid { display: grid; grid-template-columns: minmax(0, 1fr) 330px; gap: 18px; align-items: start; }
   @media (max-width: 1080px) { .grid { grid-template-columns: 1fr; } }
+  .grid.hidden { display: none; }
+
+  /* ---------- tabs ---------- */
+  .tabs { display: flex; gap: 6px; margin-bottom: 16px; flex-wrap: wrap; }
+  .tab {
+    font: inherit; font-size: 12.5px; cursor: pointer;
+    color: var(--text-dim); background: transparent;
+    border: 1px solid transparent; border-radius: 7px;
+    padding: 7px 13px; transition: background .12s, color .12s;
+  }
+  .tab:hover { color: var(--text); background: var(--surface); }
+  .tab.on {
+    color: var(--text); background: var(--surface);
+    border-color: var(--border);
+  }
+
+  .note {
+    padding: 11px 16px; font-size: 12px; color: var(--text-faint);
+    border-bottom: 1px solid var(--border-soft); line-height: 1.55;
+  }
+
+  /* ---------- video brief ---------- */
+  .brief {
+    padding: 14px 16px; border-bottom: 1px solid var(--border-soft);
+  }
+  .brief:last-child { border-bottom: none; }
+  .brief .b-head { display: flex; gap: 10px; align-items: flex-start; }
+  .brief .b-title { flex: 1; font-size: 14px; font-weight: 570; line-height: 1.45; }
+  .brief .b-article {
+    margin-top: 10px; padding: 12px 14px;
+    background: var(--surface-2); border-radius: 8px;
+    border-left: 2px solid var(--accent);
+    font-size: 13.5px; line-height: 1.72; white-space: pre-wrap;
+  }
+  .brief .b-article.empty { color: var(--text-faint); font-style: italic; }
+  .brief .b-meta {
+    margin-top: 9px; font-size: 11.5px; color: var(--text-faint);
+    display: flex; flex-wrap: wrap; gap: 6px 12px;
+  }
+  .brief .b-meta a { color: var(--accent); text-decoration: none; }
+  .brief .b-meta a:hover { text-decoration: underline; }
+  .brief details { margin-top: 10px; }
+  .brief summary {
+    cursor: pointer; font-size: 11.5px; color: var(--text-dim);
+    user-select: none;
+  }
+  .brief summary:hover { color: var(--text); }
+  .brief .b-transcript {
+    margin-top: 8px; padding: 10px 12px; background: var(--surface-2);
+    border-radius: 8px; font-size: 12.5px; line-height: 1.68;
+    color: var(--text-dim); max-height: 300px; overflow-y: auto;
+    white-space: pre-wrap;
+  }
+  .verdict { font-weight: 600; }
+  .verdict.ok { color: var(--high); }
+  .verdict.flagged { color: var(--medium); }
+
+  /* ---------- social account row ---------- */
+  .acct {
+    padding: 10px 16px; border-bottom: 1px solid var(--border-soft);
+    display: flex; gap: 11px; align-items: center; font-size: 12.5px;
+  }
+  .acct:last-child { border-bottom: none; }
+  .acct .plat {
+    font-size: 10px; font-weight: 700; letter-spacing: .04em;
+    text-transform: uppercase; color: var(--text-faint);
+    width: 74px; flex: none;
+  }
+  .acct .nm { flex: 1; min-width: 0; }
+  .acct .nm .t { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .acct .nm .h { font-size: 11px; color: var(--text-faint); font-family: var(--mono); }
+  .acct a { color: var(--accent); text-decoration: none; }
+  .acct a:hover { text-decoration: underline; }
 
   .panel {
     background: var(--surface); border: 1px solid var(--border);
@@ -222,7 +295,13 @@
 <main>
   <div class="cards" id="cards"></div>
 
-  <div class="grid">
+  <div class="tabs" id="tabs">
+    <button class="tab on" data-tab="articles">Website articles</button>
+    <button class="tab" data-tab="video">Video transcripts & generated briefs</button>
+    <button class="tab" data-tab="social">Social accounts</button>
+  </div>
+
+  <div class="grid" id="view-articles">
     <div class="panel">
       <h2>Articles <span class="count" id="artCount"></span></h2>
       <div class="filters">
@@ -253,6 +332,27 @@
         <h2>Recent runs</h2>
         <div id="runList"></div>
       </div>
+    </div>
+  </div>
+
+  <div class="grid hidden" id="view-video">
+    <div class="panel">
+      <h2>Video briefs <span class="count" id="trCount"></span></h2>
+      <div class="note">Each brief is generated from the video's own transcript by an
+      LLM, then checked back against that transcript: every number and proper
+      noun in the brief must appear in the source.</div>
+      <div id="transcriptList"></div>
+    </div>
+  </div>
+
+  <div class="grid hidden" id="view-social">
+    <div class="panel">
+      <h2>Social & video accounts <span class="count" id="saCount"></span></h2>
+      <div class="filters">
+        <input id="saQ" type="search" placeholder="Search accounts…" autocomplete="off">
+        <select id="saPlatform"><option value="">All platforms</option></select>
+      </div>
+      <div id="socialList"></div>
     </div>
   </div>
 </main>
@@ -460,20 +560,100 @@ function renderRuns(list) {
   }).join("");
 }
 
+/* ---------------- video briefs ---------------- */
+
+function renderTranscripts(rows) {
+  $("trCount").textContent = rows.length + " total";
+  const list = $("transcriptList");
+  if (!rows.length) {
+    list.innerHTML = `<div class="empty">No transcripts yet. Run
+      <code>python scripts/media_pipeline.py --videos 10</code> to produce some.</div>`;
+    return;
+  }
+  list.innerHTML = rows.map((t) => {
+    const fc = t.fact_check || {};
+    const verdict = fc.ok === undefined ? "" :
+      (fc.ok
+        ? `<span class="verdict ok">fact-check OK</span>`
+        : `<span class="verdict flagged">${esc(fc.flags.length)} flag(s)</span>`);
+    const flags = (fc.flags || []).map((f) => `<div>${esc(f)}</div>`).join("");
+    const article = t.article
+      ? `<div class="b-article">${esc(t.article)}</div>`
+      : `<div class="b-article empty">No article generated for this transcript.</div>`;
+    const transcript = (t.transcript_text || "");
+    return `
+      <div class="brief">
+        <div class="b-head">
+          <div class="b-title">${esc(t.title || "(untitled video)")}</div>
+          <span class="tag plain">${esc(t.method || "")}</span>
+        </div>
+        ${article}
+        <div class="b-meta">
+          <span>${esc(t.account_name || "")}</span>
+          <span>${esc(t.language || "und")}</span>
+          <span>${t.char_count || 0} chars</span>
+          <span>${t.segment_count || 0} segments</span>
+          ${verdict}
+          <a href="${esc(t.video_url)}" target="_blank" rel="noopener">watch original ↗</a>
+        </div>
+        ${flags ? `<div class="b-meta flagged">${flags}</div>` : ""}
+        ${transcript ? `<details><summary>Show the source transcript</summary>
+          <div class="b-transcript">${esc(transcript)}</div></details>` : ""}
+      </div>`;
+  }).join("");
+}
+
+/* ---------------- social accounts ---------------- */
+
+let allAccounts = [];
+
+function renderAccounts(rows) {
+  allAccounts = rows;
+  $("saCount").textContent = rows.length + " total";
+  const q = ($("saQ").value || "").toLowerCase();
+  const plat = $("saPlatform").value;
+  const shown = rows.filter((a) => {
+    if (plat && a.platform !== plat) return false;
+    if (q && !(`${a.account_name} ${a.handle || ""} ${a.profile_url}`
+      .toLowerCase().includes(q))) return false;
+    return true;
+  });
+  const list = $("socialList");
+  if (!shown.length) {
+    list.innerHTML = `<div class="empty">No accounts match.</div>`;
+    return;
+  }
+  list.innerHTML = shown.map((a) => `
+    <div class="acct">
+      <span class="plat">${esc(a.platform)}</span>
+      <span class="nm">
+        <span class="t">${esc(a.account_name)}</span>
+        ${a.channel_id ? `<span class="h">${esc(a.channel_id)}</span>` : ""}
+      </span>
+      ${a.subscribers ? `<span class="num">${esc(a.subscribers)} subs</span>` : ""}
+      <span class="state ${esc(a.verification_status)}">${esc(a.verification_status)}</span>
+      <a href="${esc(a.profile_url)}" target="_blank" rel="noopener">open ↗</a>
+    </div>`).join("");
+}
+
 /* ---------------- orchestration ---------------- */
 
 async function refresh() {
   try {
-    const [sum, arts, srcs, rns] = await Promise.all([
+    const [sum, arts, srcs, rns, trs, acs] = await Promise.all([
       api("/api/summary"),
       api("/api/articles?" + articleQuery()),
       api("/api/sources"),
       api("/api/runs?limit=12"),
+      api("/api/transcripts?limit=50"),
+      api("/api/social-accounts"),
     ]);
     renderSummary(sum);
     renderArticles(arts);
     renderSources(srcs.sources || []);
     renderRuns(rns.runs || []);
+    renderTranscripts(trs.transcripts || []);
+    renderAccounts(acs.accounts || []);
     $("dot").className = "dot";
     $("dot").title = "connected";
   } catch (e) {
@@ -482,6 +662,21 @@ async function refresh() {
     $("statusText").classList.add("error");
   }
 }
+
+/* ---------------- tabs ---------------- */
+
+document.querySelectorAll(".tab").forEach((btn) => {
+  btn.addEventListener("click", () => {
+    document.querySelectorAll(".tab").forEach((b) => b.classList.remove("on"));
+    btn.classList.add("on");
+    ["articles", "video", "social"].forEach((name) => {
+      $("view-" + name).classList.toggle("hidden", name !== btn.dataset.tab);
+    });
+  });
+});
+
+$("saQ").addEventListener("input", () => renderAccounts(allAccounts));
+$("saPlatform").addEventListener("change", () => renderAccounts(allAccounts));
 
 let debounce = null;
 $("q").addEventListener("input", () => {

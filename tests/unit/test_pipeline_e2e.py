@@ -264,8 +264,7 @@ class SitemapOnlyHandler(NoFeedHandler):
     def do_GET(self):
         if self.path == "/":
             self._send(b"<html><head><title>Portal</title></head>"
-                       b"<body><p>plain portal page</p></body></html>"
-                       .encode("utf-8"))
+                       b"<body><p>plain portal page</p></body></html>")
         elif self.path == "/sitemap.xml":
             base = f"http://{self.headers['Host']}"
             self._send((SITEMAP % {"base": base}).encode("utf-8"),

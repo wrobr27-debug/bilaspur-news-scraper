@@ -124,7 +124,9 @@ class CollectionPipeline:
 
             # D11: feed-only when a feed is available; when it is not,
             # fall through to sitemap -> listing (bounded discovery).
-            discovery = DiscoveryEngine(fetcher, page_fetcher=page_fetcher)
+            discovery = DiscoveryEngine(
+                fetcher, page_fetcher=page_fetcher,
+                source_scope=getattr(source_row, "coverage_scope", None))
             discovery.set_robots_sitemaps(list(robots.sitemaps or []))
             outcome = await discovery.discover(
                 source_row.url,

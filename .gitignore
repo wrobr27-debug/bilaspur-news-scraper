@@ -17,3 +17,9 @@ dist/
 
 # Browser-tooling artifacts (MCP snapshots, console logs)
 .playwright-mcp/
+
+# Reconnaissance reports (regenerate with scripts/recon_sources.py)
+data/recon.json
+data/endpoints.json
+data/sitemap_probe.json
+data/ua_matrix.json

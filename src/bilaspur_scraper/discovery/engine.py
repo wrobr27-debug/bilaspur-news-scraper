@@ -18,14 +18,36 @@ from .sitemaps import SitemapResult, parse_sitemap
 
 logger = logging.getLogger(__name__)
 
+#: URL shapes that identify a news article.
+#:
+#: The keyword may be a whole path segment (`/news/story`) or the tail
+#: of a compound segment (`/bilaspur-news/story`). A *bare* keyword
+#: segment (`/state-news`, `/national-news`) is a section index, not an
+#: article, so a bare segment never matches on its own - an article URL
+#: must have something after the keyword (a slug, a date path, or a
+#: numeric id).
 ARTICLE_PATH_RE = re.compile(
     r"/(news|article|stories|story|notice|tender|press|circular|order|"
-    r"whats-new|news-detail|content|post)s?/|/20\d\d/\d\d?/|\.(html|htm|php)$",
+    r"whats-new|news-detail|content|post|blog|vlogs)"
+    r"[-/][^/]+/"          # /news/slug/  or  /bilaspur-news/slug/
+    r"|/(news|article|stories|story|notice|tender|press|circular|order|"
+    r"whats-new|news-detail|content|post|blog|vlogs)"
+    r"[-/][^/]+$"          # /news/slug   (no trailing slash)
+    r"|/20\d\d/\d\d?/"     # /2026/11/
+    r"|/\d{4,}/"           # /12345/ numeric id
+    r"|\.(html|htm|php)$",
     re.IGNORECASE,
 )
+#: Paths that are never articles even when they contain a news-ish word.
+#: Only *section index* names belong here. Words like "explainer" or
+#: "viral" are NOT listed: publishers use them as real article
+#: categories (`/explainer/news/some-story`), so excluding them throws
+#: away genuine articles.
 NON_ARTICLE_RE = re.compile(
-    r"\.(jpg|jpeg|png|gif|pdf|css|js|ico|svg|zip)([?#]|$)|"
-    r"/(category|tag|author|page|search|wp-|login|feed)/",
+    r"\.(jpg|jpeg|png|gif|pdf|css|js|ico|svg|zip|xml|json)([?#]|$)|"
+    r"/(category|categories|tag|tags|author|authors|page|pages|search|"
+    r"login|feed|rss|atom|privacy|terms|about|contact|advertisement|"
+    r"subscribe|newsletter|events?|photo|gallery|web-stories)([-/]|$)",
     re.IGNORECASE,
 )
 COMMON_FEED_PATHS = [

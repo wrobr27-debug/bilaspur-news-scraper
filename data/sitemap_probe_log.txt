@@ -1,0 +1,55 @@
+testing 20 sources with sitemaps
+
+  amar-ujala-bilaspur                          sm_entries=816    bilaspur=14
+        OK  http=200 body=  529 चम्पावत की सबसे ताज़ा खबर
+        FAIL http=None body=    0 
+  bilaspur-live                                sm_entries=600    bilaspur=222
+        OK  http=200 body= 2490 बिलासपुर रेल कोचिंग डिपो का अनोखा प्रयोग: ‘लिक्विड ट
+        OK  http=200 body= 2846 बिलासपुर एयरपोर्ट के लिए होगा सड़क का आंदोलन, जून के
+  chhattisgarh-janta-ki-awaaz-news             sm_entries=1956   bilaspur=578
+        OK  http=200 body= 3199 Janjgir Champa Breaking: जांजगीर-चांपा के ग्राम सरखो
+        FAIL http=None body=    0 
+  dainik-bhaskar                               sm_entries=6690   bilaspur=75
+        FAIL http=200 body=  218 नाजिम कॉलोनी की मेन रोड पर गड्ढे और गंदा पानी: वार्ड
+        FAIL http=200 body=  292 रसूलाबाद में छठ पूजा शुरू हुई: रतनपुर रजबहा किनारे प
+  deshbandhu                                   sm_entries=268    bilaspur=0
+  glibs-in                                     sm_entries=200    bilaspur=2
+        OK  http=200 body= 1939 कवर्धा-बेमेतरा मार्ग पर पशुओं को देख उप मुख्यमंत्री 
+        FAIL http=None body=    0 
+  haribhoomi-bilaspur                          sm_entries=200    bilaspur=1
+        OK  http=200 body= 1704 केंदा घाट में सड़क पर पलटा कंटेनर : पेंड्रा-बिलासपुर
+  ibc24                                        sm_entries=1000   bilaspur=2
+        OK  http=200 body= 1892 कोटा तकनीशियन मौत: अस्पताल अधीक्षक, नर्सिंग कर्मचारि
+        OK  http=200 body= 3009 कोटा के अस्पताल में प्रसव बाद की जटिलताओं से एक और म
+  indian-industries-association-bilaspur       sm_entries=59     bilaspur=59
+        OK  http=200 body=  303 Members of Bilaspur Centre participate in Save Hasde
+        FAIL http=None body=    0 
+  intv                                         sm_entries=10     bilaspur=1
+        OK  http=200 body=  468 Excellent Online News in Bilaspur - Intv - Online Ne
+  janta-ki-aawaz                               sm_entries=2001   bilaspur=17
+        OK  http=200 body= 1304 Sakti Royal Family : सक्ती से बड़ी खबर&#8230;! दुष्क
+        OK  http=200 body= 1511 Bhoomi Pujan : मनेन्द्रगढ़ में राजनीतिक तनाव&#8230;!
+  jungle-book                                  sm_entries=11     bilaspur=1
+        OK  http=200 body=  513 Excellent Journalism in Bilaspur - Jungle Book - Jou
+  live-hindustan-bilaspur                      sm_entries=889    bilaspur=4
+        OK  http=200 body= 4519 कल किस केंद्रीय मंत्री को घेरने की तैयारी में नेहा ब
+        FAIL http=None body=    0 
+  live-tv-chhattisgarh                         sm_entries=135    bilaspur=0
+  nai-dunia-bilaspur                           sm_entries=339    bilaspur=17
+        OK  http=200 body= 1768 बिलासपुर में नाबालिग का गर्भपात कर भ्रूण नदी में फें
+        FAIL http=None body=    0 
+  nishaanebaz                                  sm_entries=2000   bilaspur=64
+        OK  http=200 body= 1087 Mungeli News :25 जून को कांग्रेस का कलेक्ट्रेट घेराव
+        FAIL http=None body=    0 
+  patrika                                      sm_entries=1345   bilaspur=17
+        OK  http=200 body=  571 खाटूश्यामजी जन्मोत्सव के लिए रेलवे का तोहफा, 19 नवंब
+        FAIL http=200 body=  282 RTE Admission 2027: 1 दिसंबर से शुरू होंगे आवेदन, इस
+  raja-sahab-news-agency                       sm_entries=1150   bilaspur=0
+  takhatpur-ki-bhadas                          sm_entries=1984   bilaspur=1984
+        FAIL http=200 body= 1482 
+        FAIL http=None body=    0 
+  vistaar-news-bilaspur                        sm_entries=4000   bilaspur=70
+        OK  http=200 body= 1900 MP News: शिवराज सिंह, वीडी शर्मा और भूपेंद्र सिंह के
+        OK  http=200 body= 2613 Lok Sabha Election: कांग्रेस के लोकसभा प्रत्याशी देव
+
+15/20 sources extracted a full article over plain HTTP from their sitemap

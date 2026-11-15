@@ -1,0 +1,30 @@
+probing 25 sources with 6 workers
+
+  bilaspur-police                                robots=403   home=200   html  entries=0
+  chhattisgarh-janta-ki-awaaz-news               robots=200   home=200   FEED  entries=10
+  chhattisgarh-chamber-of-commerce-industries    robots=404   home=200   html  entries=0
+  amar-ujala-bilaspur                            robots=200   home=200   html  entries=0
+  atal-bihari-vajpayee-vishwavidyalaya           robots=200   home=200   html  entries=0
+  deshbandhu                                     robots=200   home=200   FEED  entries=45
+  dainik-bhaskar                                 robots=200   home=200   html  entries=0
+  glibs-in                                       robots=200   home=200   FEED  entries=10
+  ibc24                                          robots=200   home=200   FEED  entries=58
+  haribhoomi-bilaspur                            robots=200   home=200   html  entries=0
+  janta-ki-aawaz                                 robots=200   home=200   FEED  entries=10
+  indian-industries-association-bilaspur         robots=200   home=200   html  entries=0
+  live-hindustan-bilaspur                        robots=200   home=200   html  entries=0
+  jungle-book                                    robots=200   home=200   html  entries=0
+  live-tv-chhattisgarh                           robots=200   home=200   FEED  entries=10
+  intv                                           robots=200   home=200   html  entries=0
+  bilaspur-municipal-corporation                 robots=None  home=None  ----  entries=0
+  nishaanebaz                                    robots=200   home=200   FEED  entries=10
+  ndtv-mpcg                                      robots=403   home=403   ----  entries=0
+  nai-dunia-bilaspur                             robots=200   home=200   html  entries=0
+  patrika                                        robots=200   home=200   html  entries=0
+  south-eastern-coalfields-limited-secl          robots=403   home=403   ----  entries=0
+  district-election-officer-bilaspur             robots=None  home=None  ----  entries=0
+  vistaar-news-bilaspur                          robots=200   home=200   FEED  entries=10
+  zila-panchayat-bilaspur                        robots=None  home=None  ----  entries=0
+
+8/25 have a usable feed
+report: data/recon.json

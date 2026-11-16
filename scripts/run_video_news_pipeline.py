@@ -58,7 +58,10 @@ from bilaspur_scraper.publishing.image_providers import (  # noqa: E402
     available_providers,
     generate_featured_image,
 )
-from bilaspur_scraper.publishing.pipeline import publish_from_transcript  # noqa: E402
+from bilaspur_scraper.publishing.pipeline import (  # noqa: E402
+    choose_categories,
+    publish_from_transcript,
+)
 
 sys.path.insert(0, str(ROOT / "scripts"))
 from media_pipeline import (  # noqa: E402
@@ -178,6 +181,15 @@ def main() -> int:
         return 0
 
     results = []
+    # the site's own categories, read once
+    slug_map: dict[str, int] = {}
+    if client.configured:
+        try:
+            slug_map = client.category_slug_map()
+            print(f"site categories: {len(slug_map)}")
+        except Exception as exc:  # noqa: BLE001
+            print(f"could not read the site categories: {exc}")
+
     for i, v in enumerate(videos, 1):
         print(f"--- [{i}/{len(videos)}] {v['channel']}: {(v['title'] or '')[:56]}")
         url = v["url"]
@@ -266,8 +278,14 @@ def main() -> int:
                             "slug": payload["slug"]})
             continue
 
-        category_ids = client.category_ids(
-            [c.strip() for c in args.categories.split(",") if c.strip()])
+        category_ids = []
+        if slug_map:
+            category_ids = choose_categories(facts, available_slugs=slug_map)
+            names = [s for s, i in slug_map.items() if i in category_ids]
+            print(f"    category: {', '.join(names)}")
+        else:
+            category_ids = client.category_ids(
+                [c.strip() for c in args.categories.split(",") if c.strip()])
         result = publish_from_transcript(
             t["text"], client=client, video_url=url,
             channel=v["channel"], published_label=(v["published"] or "")[:10],

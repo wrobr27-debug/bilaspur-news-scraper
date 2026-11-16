@@ -88,6 +88,77 @@ def check_facts(facts: FactSheet, transcript: str) -> dict:
             "transcript_chars": len(transcript)}
 
 
+#: The site's own category slugs, mapped from the words that select
+#: them. The ids are read from the live site at runtime, so a new
+#: category is picked up without a code change; this map only says
+#: which slug a story belongs to.
+#:
+#: The words are deliberately narrow. "पुलिस" alone must not select
+#: `crime` - a traffic story quotes the police too - so the crime rule
+#: looks for the *act* (an assault, a theft, an arrest), not the
+#: institution.
+CATEGORY_RULES: tuple[tuple[str, tuple[str, ...]], ...] = (
+    ("bilaspur", ()),                       # always
+    ("breaking", ("breaking", "अभी", "तत्काल")),
+    ("crime", ("अपराध", "मारपीट", "लूट", "गिरफ्तार", "crime", "assault",
+               "murder", "fraud", "धोखाधड़ी", "हत्या", "चोरी", "बलात्कार")),
+    ("traffic", ("ट्रैफिक", "traffic", "accident", "दुर्घटना", "road",
+                 "सड़क", "crash", "collison", "टक्कर")),
+    ("health", ("स्वास्थ्य", "health", "hospital", "अस्पताल", "disease",
+                "डेंगू", "covid", "medical", "वार्ड")),
+    ("politics", ("राजनीति", "politics", "mla", "विधायक", "चुनाव",
+                  "election", "minister", "मंत्री", "विधानसभा")),
+    ("local-events", ("समारोह", "festival", "त्योहार", "मेला", "पूजा",
+                      "चठ", "नगर सभा", "जश्न")),
+    ("nagar-nigam", ("नगर निगम", "nagar nigam", "municipal", "निगम")),
+    ("district-administration", ("जिला प्रशासन", "कलेक्टर", "collector",
+                                 "district administration", "tehsil",
+                                 "तहसील")),
+    ("jobs-careers", ("भर्ती", "recruitment", "naukri", "रोजगार", "vacancy",
+                      "jobs", "career", "walk-in")),
+    ("education", ("शिक्षा", "education", "school", "विद्यालय", "college",
+                   "महाविद्यालय", "university", "विश्वविद्यालय", "ugc",
+                   "net exam")),
+    ("business", ("व्यापार", "business", "market", "बाजार", "shop",
+                  "दुकान", "factory", "कारखाना")),
+    ("sports", ("खेल", "sports", "cricket", "क्रिकेट", "football",
+                "टेनिस", "tournament", "टूर्नामेंट")),
+    ("entertainment", ("मनोरंजन", "entertainment", "movie", "फिल्म",
+                       "bollywood", "सिनेमा")),
+)
+
+
+def choose_categories(facts: FactSheet, *, available_slugs: dict[str, int],
+                      default_slug: str = "bilaspur") -> list[int]:
+    """Pick the site's categories for a story.
+
+    `bilaspur` is always included. The rest come from the words in the
+    story, matched against the site's own category list. Ids are looked
+    up at runtime, so a slug the site does not have is skipped rather
+    than sent as a wrong id.
+    """
+    ids: list[int] = []
+    haystack = " ".join([
+        facts.headline, facts.lede,
+        " ".join(k.label + " " + k.detail for k in facts.keypoints),
+        " ".join(s.value + " " + s.label for s in facts.stats),
+        " ".join(sec.heading + " " + " ".join(sec.paragraphs)
+                  for sec in facts.sections),
+    ]).lower()
+
+    for slug, words in CATEGORY_RULES:
+        if slug not in available_slugs:
+            continue
+        if not words:
+            ids.append(available_slugs[slug])
+            continue
+        if any(w.lower() in haystack for w in words):
+            ids.append(available_slugs[slug])
+    if not ids and default_slug in available_slugs:
+        ids.append(available_slugs[default_slug])
+    return ids
+
+
 def build_post_payload(facts: FactSheet, *, channel: str | None = None,
                        include_ads: bool = True) -> dict:
     """The body HTML, the excerpt and the slug for a fact sheet."""

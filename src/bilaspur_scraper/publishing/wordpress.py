@@ -139,6 +139,19 @@ class WordPressClient:
                 found.append(int(cat["id"]))
         return found
 
+    def category_slug_map(self) -> dict[str, int]:
+        """Every category on the site as `{slug: id}`.
+
+        Read at runtime so a category added to the site is picked up
+        without a code change.
+        """
+        out: dict[str, int] = {}
+        for cat in self.list_categories():
+            slug = str(cat.get("slug") or "").strip().lower()
+            if slug:
+                out[slug] = int(cat["id"])
+        return out
+
     def find_post_by_slug(self, slug: str) -> Optional[dict]:
         """An existing post with this slug, if any - used for dedup."""
         data = self._request("GET", "posts",

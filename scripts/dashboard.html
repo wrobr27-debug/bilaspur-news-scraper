@@ -96,18 +96,59 @@
   .grid.hidden { display: none; }
 
   /* ---------- tabs ---------- */
-  .tabs { display: flex; gap: 6px; margin-bottom: 16px; flex-wrap: wrap; }
+  .tabs { display: flex; gap: 8px; margin-bottom: 16px; flex-wrap: wrap; }
   .tab {
-    font: inherit; font-size: 12.5px; cursor: pointer;
+    font: inherit; font-size: 13px; cursor: pointer;
     color: var(--text-dim); background: transparent;
-    border: 1px solid transparent; border-radius: 7px;
-    padding: 7px 13px; transition: background .12s, color .12s;
+    border: 1px solid var(--border-soft); border-radius: 9px;
+    padding: 9px 14px; transition: background .12s, color .12s, border-color .12s;
+    display: flex; align-items: center; gap: 9px;
   }
   .tab:hover { color: var(--text); background: var(--surface); }
   .tab.on {
     color: var(--text); background: var(--surface);
-    border-color: var(--border);
+    border-color: var(--accent);
+    box-shadow: inset 0 0 0 1px rgba(74,158,255,.18);
   }
+  .tab .tab-k {
+    font-size: 10px; font-weight: 700; letter-spacing: .06em;
+    text-transform: uppercase; color: var(--text-faint);
+    padding: 2px 6px; border-radius: 4px; background: var(--surface-2);
+  }
+  .tab.on .tab-k { color: var(--accent); background: var(--accent-soft); }
+  .tab .tab-n {
+    font-size: 11px; font-weight: 600; color: var(--text-faint);
+    font-variant-numeric: tabular-nums; font-family: var(--mono);
+    padding-left: 9px; border-left: 1px solid var(--border-soft);
+  }
+  .tab.on .tab-n { color: var(--text-dim); }
+  .tab .win-sel {
+    font: inherit; font-size: 12.5px; cursor: pointer;
+    color: var(--text); background: var(--surface-2);
+    border: 1px solid var(--border); border-radius: 6px;
+    padding: 3px 7px; outline: none;
+  }
+  .tab.on .win-sel { border-color: var(--accent); }
+
+  /* ---------- recent video row ---------- */
+  .rv {
+    padding: 11px 16px; border-bottom: 1px solid var(--border-soft);
+    display: flex; gap: 12px; align-items: flex-start;
+  }
+  .rv:last-child { border-bottom: none; }
+  .rv .rv-when {
+    font-family: var(--mono); font-size: 11px; color: var(--text-faint);
+    width: 96px; flex: none; padding-top: 1px;
+  }
+  .rv .rv-body { flex: 1; min-width: 0; }
+  .rv .rv-title { font-size: 13.5px; line-height: 1.5; }
+  .rv .rv-title a { color: var(--text); text-decoration: none; }
+  .rv .rv-title a:hover { color: var(--accent); text-decoration: underline; }
+  .rv .rv-sub {
+    margin-top: 4px; font-size: 11.5px; color: var(--text-faint);
+    display: flex; flex-wrap: wrap; gap: 5px 11px;
+  }
+  .rv .rv-term { color: var(--accent); }
 
   .note {
     padding: 11px 16px; font-size: 12px; color: var(--text-faint);
@@ -122,12 +163,21 @@
   .brief .b-head { display: flex; gap: 10px; align-items: flex-start; }
   .brief .b-title { flex: 1; font-size: 14px; font-weight: 570; line-height: 1.45; }
   .brief .b-article {
-    margin-top: 10px; padding: 12px 14px;
+    margin-top: 0; padding: 12px 14px;
     background: var(--surface-2); border-radius: 8px;
     border-left: 2px solid var(--accent);
     font-size: 13.5px; line-height: 1.72; white-space: pre-wrap;
   }
   .brief .b-article.empty { color: var(--text-faint); font-style: italic; }
+  .brief .b-block { margin-top: 12px; }
+  .brief .b-label {
+    font-size: 10px; font-weight: 700; letter-spacing: .06em;
+    text-transform: uppercase; color: var(--text-faint);
+    margin-bottom: 6px;
+  }
+  .brief .b-label-ai { color: var(--accent); }
+  .brief .b-meta.b-src { margin-top: 8px; }
+  .brief .b-meta .flagged { color: var(--medium); }
   .brief .b-meta {
     margin-top: 9px; font-size: 11.5px; color: var(--text-faint);
     display: flex; flex-wrap: wrap; gap: 6px 12px;
@@ -296,14 +346,35 @@
   <div class="cards" id="cards"></div>
 
   <div class="tabs" id="tabs">
-    <button class="tab on" data-tab="articles">Website articles</button>
-    <button class="tab" data-tab="video">Video transcripts & generated briefs</button>
-    <button class="tab" data-tab="social">Social accounts</button>
+    <button class="tab on" data-tab="articles">
+      <span class="tab-k">Website</span>Scraped articles
+      <span class="tab-n" id="tabArtN">0</span>
+    </button>
+    <button class="tab" data-tab="video">
+      <span class="tab-k">Video</span>Transcripts & AI briefs
+      <span class="tab-n" id="tabTrN">0</span>
+    </button>
+    <button class="tab" data-tab="social">
+      <span class="tab-k">Accounts</span>Social & video sources
+      <span class="tab-n" id="tabSaN">0</span>
+    </button>
+    <button class="tab" data-tab="recent">
+      <span class="tab-k">Latest</span>Published in the last
+      <select id="recentWindow" class="win-sel">
+        <option value="6">6 hours</option>
+        <option value="24" selected>24 hours</option>
+        <option value="72">3 days</option>
+        <option value="168">7 days</option>
+      </select>
+      <span class="tab-n" id="tabRvN">0</span>
+    </button>
   </div>
 
   <div class="grid" id="view-articles">
     <div class="panel">
-      <h2>Articles <span class="count" id="artCount"></span></h2>
+      <h2>Scraped from publisher websites <span class="count" id="artCount"></span></h2>
+      <div class="note">Collected from the publishers' own websites — the
+      article text is theirs, stored verbatim. No AI was involved.</div>
       <div class="filters">
         <input id="q" type="search" placeholder="Search title or body…" autocomplete="off">
         <select id="sourceFilter"><option value="">All sources</option></select>
@@ -325,7 +396,7 @@
 
     <div>
       <div class="panel" style="margin-bottom:18px">
-        <h2>Sources <span class="count" id="srcCount"></span></h2>
+        <h2>Website sources <span class="count" id="srcCount"></span></h2>
         <div id="sourceList"></div>
       </div>
       <div class="panel">
@@ -337,17 +408,37 @@
 
   <div class="grid hidden" id="view-video">
     <div class="panel">
-      <h2>Video briefs <span class="count" id="trCount"></span></h2>
-      <div class="note">Each brief is generated from the video's own transcript by an
-      LLM, then checked back against that transcript: every number and proper
-      noun in the brief must appear in the source.</div>
+      <h2>Transcribed videos & AI-written briefs <span class="count" id="trCount"></span></h2>
+      <div class="note">
+        <strong>Two separate things below.</strong>
+        <em>The transcript</em> is the video's own words, extracted from its
+        caption track. <em>The brief</em> is written by an LLM from that
+        transcript, then checked back against it — every number and proper
+        noun in the brief must appear in the transcript it came from.
+        The video is always linked so you can check it yourself.
+      </div>
       <div id="transcriptList"></div>
+    </div>
+  </div>
+
+  <div class="grid hidden" id="view-recent">
+    <div class="panel">
+      <h2>Published in the last <span id="recentLabel">24</span> hours
+        <span class="count" id="rvCount"></span></h2>
+      <div class="note">Videos the channels published recently, newest first.
+        Discovered from each channel's own uploads playlist — no searching,
+        no guessing. Nothing here is transcribed yet; that happens when the
+        pipeline runs.</div>
+      <div id="recentList"></div>
     </div>
   </div>
 
   <div class="grid hidden" id="view-social">
     <div class="panel">
       <h2>Social & video accounts <span class="count" id="saCount"></span></h2>
+      <div class="note">The directory of where Bilaspur news is published —
+      YouTube channels, Instagram pages, X accounts, Facebook pages. These are
+        the <em>sources</em>; the videos above are what they published.</div>
       <div class="filters">
         <input id="saQ" type="search" placeholder="Search accounts…" autocomplete="off">
         <select id="saPlatform"><option value="">All platforms</option></select>
@@ -399,7 +490,7 @@ function articleQuery() {
 function renderSummary(s) {
   lastSummary = s;
   const cards = [
-    ["Articles", s.articles, `${s.sources_enabled} of ${s.sources_total} sources enabled`],
+    ["Website articles", s.articles, `${s.sources_enabled} of ${s.sources_total} sites enabled`],
     ["Sources enabled", s.sources_enabled, Object.entries(s.sources_by_state)
       .map(([k, v]) => `${v} ${k}`).join(" · ")],
     ["Sensitive", s.sensitive, "flagged for review"],
@@ -411,12 +502,13 @@ function renderSummary(s) {
       <div class="value">${esc(value)}</div>
       <div class="sub">${esc(sub)}</div>
     </div>`).join("");
+  $("tabArtN").textContent = s.articles;
 
   const last = (s.last_run && s.last_run[0]) || null;
   if (last) {
     const t = last.totals || {};
     $("statusText").textContent =
-      `last run ${last.mode} · ${t.written ?? 0} written · ${t.extracted ?? 0} extracted`;
+      `last website run ${last.mode} · ${t.written ?? 0} written · ${t.extracted ?? 0} extracted`;
   } else {
     $("statusText").textContent = "no runs yet";
   }
@@ -564,6 +656,7 @@ function renderRuns(list) {
 
 function renderTranscripts(rows) {
   $("trCount").textContent = rows.length + " total";
+  $("tabTrN").textContent = rows.length;
   const list = $("transcriptList");
   if (!rows.length) {
     list.innerHTML = `<div class="empty">No transcripts yet. Run
@@ -577,27 +670,39 @@ function renderTranscripts(rows) {
         ? `<span class="verdict ok">fact-check OK</span>`
         : `<span class="verdict flagged">${esc(fc.flags.length)} flag(s)</span>`);
     const flags = (fc.flags || []).map((f) => `<div>${esc(f)}</div>`).join("");
-    const article = t.article
-      ? `<div class="b-article">${esc(t.article)}</div>`
-      : `<div class="b-article empty">No article generated for this transcript.</div>`;
     const transcript = (t.transcript_text || "");
+    const article = t.article
+      ? `<div class="b-article">
+           <div class="b-label">AI-written brief</div>
+           ${esc(t.article)}
+         </div>`
+      : `<div class="b-article empty">No brief generated for this transcript.</div>`;
     return `
       <div class="brief">
         <div class="b-head">
           <div class="b-title">${esc(t.title || "(untitled video)")}</div>
           <span class="tag plain">${esc(t.method || "")}</span>
         </div>
-        ${article}
-        <div class="b-meta">
-          <span>${esc(t.account_name || "")}</span>
+        <div class="b-meta b-src">
+          <span class="src">${esc(t.account_name || "")}</span>
           <span>${esc(t.language || "und")}</span>
-          <span>${t.char_count || 0} chars</span>
-          <span>${t.segment_count || 0} segments</span>
-          ${verdict}
-          <a href="${esc(t.video_url)}" target="_blank" rel="noopener">watch original ↗</a>
+          <span>${t.char_count || 0} chars transcribed</span>
+          <span>${t.segment_count || 0} caption segments</span>
+          <a href="${esc(t.video_url)}" target="_blank" rel="noopener">watch the original video ↗</a>
         </div>
-        ${flags ? `<div class="b-meta flagged">${flags}</div>` : ""}
-        ${transcript ? `<details><summary>Show the source transcript</summary>
+
+        <div class="b-block">
+          <div class="b-label b-label-ai">AI-written brief</div>
+          ${t.article
+            ? `<div class="b-article">${esc(t.article)}</div>`
+            : `<div class="b-article empty">No brief generated for this transcript.</div>`}
+          <div class="b-meta">
+            ${verdict}
+            ${flags ? `<span class="flagged">${flags}</span>` : ""}
+          </div>
+        </div>
+
+        ${transcript ? `<details><summary>Verbatim transcript — the video's own words</summary>
           <div class="b-transcript">${esc(transcript)}</div></details>` : ""}
       </div>`;
   }).join("");
@@ -610,6 +715,7 @@ let allAccounts = [];
 function renderAccounts(rows) {
   allAccounts = rows;
   $("saCount").textContent = rows.length + " total";
+  $("tabSaN").textContent = rows.length;
   const q = ($("saQ").value || "").toLowerCase();
   const plat = $("saPlatform").value;
   const shown = rows.filter((a) => {
@@ -636,17 +742,54 @@ function renderAccounts(rows) {
     </div>`).join("");
 }
 
+/* ---------------- recent videos ---------------- */
+
+let recentHours = 24;
+
+function renderRecent(rows, hours) {
+  $("rvCount").textContent = rows.length + " total";
+  $("tabRvN").textContent = rows.length;
+  $("recentLabel").textContent = hours;
+  const list = $("recentList");
+  if (!rows.length) {
+    list.innerHTML = `<div class="empty">Nothing published in the last
+      ${hours} hours. Run <code>python scripts/recent_videos.py --hours ${hours}</code>
+      to check again.</div>`;
+    return;
+  }
+  list.innerHTML = rows.map((v) => {
+    const when = (v.published_label || v.published_at || "").slice(0, 16)
+      .replace("T", " ");
+    const terms = (v.match_terms || "").split(",").filter(Boolean);
+    return `
+      <div class="rv">
+        <span class="rv-when">${esc(when)}</span>
+        <span class="rv-body">
+          <div class="rv-title">
+            <a href="${esc(v.url)}" target="_blank" rel="noopener">${esc(v.title || "(untitled)")}</a>
+          </div>
+          <div class="rv-sub">
+            <span>${esc(v.account_name || "")}</span>
+            ${terms.length ? `<span class="rv-term">${esc(terms.join(", "))}</span>` : ""}
+            <span>${esc(v.discovered_via || "")}</span>
+          </div>
+        </span>
+      </div>`;
+  }).join("");
+}
+
 /* ---------------- orchestration ---------------- */
 
 async function refresh() {
   try {
-    const [sum, arts, srcs, rns, trs, acs] = await Promise.all([
+    const [sum, arts, srcs, rns, trs, acs, rvs] = await Promise.all([
       api("/api/summary"),
       api("/api/articles?" + articleQuery()),
       api("/api/sources"),
       api("/api/runs?limit=12"),
       api("/api/transcripts?limit=50"),
       api("/api/social-accounts"),
+      api("/api/recent-videos?hours=" + recentHours + "&limit=100"),
     ]);
     renderSummary(sum);
     renderArticles(arts);
@@ -654,6 +797,7 @@ async function refresh() {
     renderRuns(rns.runs || []);
     renderTranscripts(trs.transcripts || []);
     renderAccounts(acs.accounts || []);
+    renderRecent(rvs.videos || [], recentHours);
     $("dot").className = "dot";
     $("dot").title = "connected";
   } catch (e) {
@@ -669,7 +813,7 @@ document.querySelectorAll(".tab").forEach((btn) => {
   btn.addEventListener("click", () => {
     document.querySelectorAll(".tab").forEach((b) => b.classList.remove("on"));
     btn.classList.add("on");
-    ["articles", "video", "social"].forEach((name) => {
+    ["articles", "video", "social", "recent"].forEach((name) => {
       $("view-" + name).classList.toggle("hidden", name !== btn.dataset.tab);
     });
   });
@@ -677,6 +821,12 @@ document.querySelectorAll(".tab").forEach((btn) => {
 
 $("saQ").addEventListener("input", () => renderAccounts(allAccounts));
 $("saPlatform").addEventListener("change", () => renderAccounts(allAccounts));
+$("recentWindow").addEventListener("change", async (e) => {
+  e.stopPropagation();
+  recentHours = Number(e.target.value);
+  const rvs = await api("/api/recent-videos?hours=" + recentHours + "&limit=100");
+  renderRecent(rvs.videos || [], recentHours);
+});
 
 let debounce = null;
 $("q").addEventListener("input", () => {

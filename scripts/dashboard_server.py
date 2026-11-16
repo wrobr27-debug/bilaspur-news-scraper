@@ -26,7 +26,7 @@ import os
 import sqlite3
 import sys
 import threading
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import parse_qs, urlsplit
@@ -242,6 +242,32 @@ def social_accounts(conn: sqlite3.Connection) -> list[dict]:
         "FROM social_accounts ORDER BY platform, account_name"))
 
 
+def recent_videos(conn: sqlite3.Connection, hours: int = 24,
+                  limit: int = 100) -> list[dict]:
+    """Videos published within the last `hours`, newest first.
+
+    Only videos with a real `published_at` are considered - the dataset
+    also holds videos found by search, which have no timestamp.
+    """
+    tables = {r[0] for r in conn.execute(
+        "SELECT name FROM sqlite_master WHERE type='table'")}
+    if "social_videos" not in tables:
+        return []
+    since = datetime.now(timezone.utc) - timedelta(hours=hours)
+    rows = _rows(conn.execute(
+        "SELECT v.video_id, v.url, v.title, v.published_at, "
+        "       v.published_label, v.match_terms, v.discovered_via, "
+        "       v.views_label, "
+        "       a.account_name, a.channel_id "
+        "FROM social_videos v "
+        "LEFT JOIN social_accounts a ON a.account_id = v.account_id "
+        "WHERE v.published_at IS NOT NULL "
+        "  AND v.published_at >= ? "
+        "ORDER BY v.published_at DESC LIMIT ?",
+        (since.replace(tzinfo=None), limit)))
+    return rows
+
+
 # --------------------------------------------------------------------------
 # HTTP layer
 # --------------------------------------------------------------------------
@@ -299,6 +325,12 @@ class DashboardHandler(BaseHTTPRequestHandler):
         if route == "/api/social-accounts":
             with _connect(self.db_path) as conn:
                 return self._send_json({"accounts": social_accounts(conn)})
+        if route == "/api/recent-videos":
+            hours = min(int(query.get("hours", ["24"])[0] or 24), 720)
+            limit = min(int(query.get("limit", ["100"])[0] or 100), 500)
+            with _connect(self.db_path) as conn:
+                rows = recent_videos(conn, hours, limit)
+            return self._send_json({"hours": hours, "videos": rows})
         if route.startswith("/api/article/"):
             try:
                 article_id = int(route.rsplit("/", 1)[1])

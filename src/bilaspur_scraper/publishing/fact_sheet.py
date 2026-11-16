@@ -32,9 +32,24 @@ NVIDIA_BASE = "https://integrate.api.nvidia.com/v1"
 #: same request in about 11 s with clean JSON.
 GENERATION_MODEL = "minimaxai/minimax-m3.1-flash"
 
+#: Tried in turn when the first model fails. The hosted endpoint is
+#: flaky - the same request intermittently answers HTTP 503 - so a
+#: second model is a cheap way to get an answer. These were verified as
+#: callable on this account (2026-11-16).
+FALLBACK_MODELS = (
+    "nvidia/nemotron-3.5-lightning-30b-a3b",
+    "mistralai/mistral-large-4-1t-a52b",
+    "nvidia/nemotron-3-ultra-550b-a55b",
+)
+
 #: A reasoning model spends the budget thinking; a small max_tokens
 #: returns content=None with finish_reason="length".
 GEN_MAX_TOKENS = 3000
+
+#: A transcript longer than this is trimmed. A live stream can run for
+#: hours; a news brief covers one story, and the model is far more
+#: reliable on a bounded input.
+MAX_TRANSCRIPT_CHARS = 8000
 
 #: Topics that `SKILLS.md` §10 requires to go to human review before
 #: editorial use.
@@ -169,13 +184,15 @@ def is_sensitive(text: str) -> bool:
 
 
 def extract_facts(transcript: str, *, channel: str | None = None,
-                  attempts: int = 4) -> Optional[FactSheetModel]:
+                  attempts: int = 8) -> Optional[FactSheetModel]:
     """Turn a transcript into a structured fact sheet.
 
-    The hosted endpoint is intermittently unavailable - it has been seen
-    returning HTTP 503 ("content safety screening is temporarily
-    unavailable") and timing out - so the call is retried with a
-    growing pause before giving up.
+    The hosted endpoint is intermittently unavailable: the same request
+    succeeds and then fails with HTTP 503 ("content safety screening is
+    temporarily unavailable"), which is a flaky upstream service rather
+    than a content problem - the identical payload was measured
+    succeeding and failing across consecutive calls. So the call is
+    retried generously with a jittered pause.
     """
     import time
 
@@ -183,43 +200,65 @@ def extract_facts(transcript: str, *, channel: str | None = None,
     if not key:
         return None
     from openai import OpenAI
-    client = OpenAI(base_url=NVIDIA_BASE, api_key=key, timeout=120.0,
+    client = OpenAI(base_url=NVIDIA_BASE, api_key=key, timeout=180.0,
                     max_retries=0)
 
     prompt = f"Channel: {channel or 'unknown'}\n\nTranscript:\n{transcript}"
+    if len(transcript) > MAX_TRANSCRIPT_CHARS:
+        transcript = transcript[-MAX_TRANSCRIPT_CHARS:]
+        prompt = f"Channel: {channel or 'unknown'}\n\nTranscript:\n{transcript}"
+
     last_error = ""
-    for attempt in range(1, attempts + 1):
-        try:
-            r = client.chat.completions.create(
-                model=GENERATION_MODEL,
-                messages=[{"role": "system", "content": EXTRACTION_PROMPT},
-                          {"role": "user", "content": prompt}],
-                max_tokens=GEN_MAX_TOKENS, temperature=0.2)
-            text = (r.choices[0].message.content or "").strip()
-            data = _json_from(text)
-            if data:
-                try:
-                    return FactSheetModel.model_validate(data)
-                except Exception as exc:  # noqa: BLE001
-                    last_error = f"schema mismatch: {str(exc)[:200]}"
-            else:
-                last_error = ("no JSON in reply "
-                              f"(finish_reason={r.choices[0].finish_reason})")
-        except Exception as exc:  # noqa: BLE001
-            last_error = f"{type(exc).__name__}: {str(exc)[:140]}"
-            logger.info("fact extraction attempt %d failed: %s",
-                        attempt, last_error)
-            # a rate limit needs a long pause; a 503 needs a short one
-            if "429" in last_error or "RateLimit" in last_error:
-                time.sleep(min(30 * attempt, 90))
-            elif attempt < attempts:
-                time.sleep(min(5 * attempt, 20))
-            continue
-        if attempt < attempts:
-            time.sleep(min(3 * attempt, 15))
+    models = (GENERATION_MODEL,) + FALLBACK_MODELS
+    attempt = 0
+    # The hosted endpoint answers 503 for roughly a third of calls, and
+    # the failures are not correlated with the content. So the retry
+    # rotates through the models: when one is overloaded the next is
+    # tried immediately rather than after a long pause.
+    for model in models:
+        for _ in range(3):
+            attempt += 1
+            try:
+                r = client.chat.completions.create(
+                    model=model,
+                    messages=[{"role": "system", "content": EXTRACTION_PROMPT},
+                              {"role": "user", "content": prompt}],
+                    max_tokens=GEN_MAX_TOKENS, temperature=0.2)
+                text = (r.choices[0].message.content or "").strip()
+                data = _json_from(text)
+                if data:
+                    try:
+                        return FactSheetModel.model_validate(data)
+                    except Exception as exc:  # noqa: BLE001
+                        last_error = f"schema mismatch: {str(exc)[:200]}"
+                else:
+                    last_error = ("no JSON in reply "
+                                  f"(finish_reason={r.choices[0].finish_reason})")
+                    break
+            except Exception as exc:  # noqa: BLE001
+                last_error = f"{type(exc).__name__}: {str(exc)[:140]}"
+                logger.info("fact extraction attempt %d (%s) failed: %s",
+                            attempt, model, last_error)
+                if "429" in last_error or "RateLimit" in last_error:
+                    time.sleep(min(12 * attempt, 40) + _jitter(attempt))
+                elif ("503" in last_error or "Service Unavailable" in last_error
+                      or "InternalServerError" in last_error):
+                    # overloaded right now - a short pause, then the next
+                    # model is tried
+                    time.sleep(min(3 * attempt, 10) + _jitter(attempt))
+                else:
+                    break
+                continue
+            break
     logger.warning("fact extraction failed after %d attempts: %s",
-                   attempts, last_error)
+                   attempt, last_error)
     return None
+
+
+def _jitter(attempt: int) -> float:
+    """A few seconds of jitter, so retries do not march in lockstep."""
+    import random
+    return random.uniform(1.0, 5.0 + attempt)
 
 
 def to_fact_sheet(model: FactSheetModel, *, transcript: str,

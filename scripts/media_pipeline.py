@@ -28,6 +28,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import logging
 import os
 import re
 import sys
@@ -36,6 +37,8 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
+
+logger = logging.getLogger(__name__)
 sys.path.insert(0, str(ROOT / "src"))
 
 from bilaspur_scraper.config.settings import load_env_file  # noqa: E402
@@ -79,10 +82,18 @@ SYSTEM_PROMPT = (
 # transcription
 # --------------------------------------------------------------------------
 
-def fetch_captions(video_url: str, *, languages=("hi", "hi-en", "en")) -> dict | None:
+def fetch_captions(video_url: str, *, languages=("hi", "hi-en", "en"),
+                   max_chars: int = 12000) -> dict | None:
     """The publisher's own caption track, via yt-dlp.
 
     Returns `{'text', 'segments', 'language', 'method'}` or None.
+
+    The transcript is capped at `max_chars`. A live stream can run for
+    hours and produce a transcript of several hundred thousand
+    characters, which no language model can be asked to summarise in one
+    call - and a news brief is about one story, not a day's broadcast.
+    When the cap bites, the *most recent* part is kept: for a bulletin
+    the payload at the end is the current story.
     """
     import yt_dlp
 
@@ -125,8 +136,12 @@ def fetch_captions(video_url: str, *, languages=("hi", "hi-en", "en")) -> dict |
         if len(full) < 80:
             continue
         path.unlink(missing_ok=True)
+        truncated = len(full) > max_chars
+        if truncated:
+            full = full[-max_chars:]
         return {"text": full, "segments": count, "language": lang,
-                "method": "youtube_captions"}
+                "method": "youtube_captions", "truncated": truncated,
+                "full_chars": len(full)}
     return None
 
 
@@ -155,16 +170,48 @@ def fetch_audio(video_url: str) -> Path | None:
     return mp3 if mp3.exists() else None
 
 
+#: faster-whisper needs `pyyaml`, which has no wheel for Python 3.15 -
+#: it only builds from source and fails. Python 3.11 has wheels for
+#: everything, so the transcription runs there in a subprocess while the
+#: rest of the project stays on 3.15.
+WHISPER_PYTHON = os.environ.get(
+    "WHISPER_PYTHON",
+    r"C:\Users\Asus\AppData\Local\Programs\Python\Python311\python.exe")
+
+
 def transcribe_local(audio_path: Path, *, model_size: str = "small") -> dict | None:
-    """Speech-to-text with a local Whisper model (no key, no upload)."""
+    """Speech-to-text with a local Whisper model (no key, no upload).
+
+    Always runs in the interpreter that has a working faster-whisper.
+    On Python 3.15 the package *imports* but fails when it downloads a
+    model, because `huggingface_hub` needs `pyyaml` and pyyaml has no
+    wheel for 3.15 - so "can I import it?" is not the test. The
+    subprocess path is used whenever a separate interpreter is
+    configured, and it is the only path that works.
+    """
+    if Path(WHISPER_PYTHON).exists() and \
+            Path(WHISPER_PYTHON) != Path(sys.executable):
+        result = _transcribe_subprocess(audio_path, model_size)
+        if result:
+            return result
+        # The subprocess ran but produced no text. That usually means the
+        # clip really has no narration (a photo slideshow with music),
+        # so the in-process retry would fail the same way - but try it
+        # anyway in case the subprocess itself was the problem.
+        logger.info("subprocess transcription produced no text; "
+                    "retrying in-process")
     try:
-        from faster_whisper import WhisperModel
-    except ImportError:
+        return _transcribe_inprocess(audio_path, model_size)
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("local transcription failed: %s", exc)
         return None
+
+
+def _transcribe_inprocess(audio_path: Path, model_size: str) -> dict | None:
+    from faster_whisper import WhisperModel
     model = WhisperModel(model_size, device="cpu", compute_type="int8")
     segments, info = model.transcribe(
-        str(audio_path), language="hi", beam_size=5,
-        vad_filter=True)
+        str(audio_path), language="hi", beam_size=5, vad_filter=True)
     parts = []
     count = 0
     for seg in segments:
@@ -177,6 +224,61 @@ def transcribe_local(audio_path: Path, *, model_size: str = "small") -> dict | N
         return None
     return {"text": full, "segments": count,
             "language": getattr(info, "language", "hi"),
+            "method": "whisper_local",
+            "model": f"faster-whisper/{model_size}"}
+
+
+def _transcribe_subprocess(audio_path: Path, model_size: str) -> dict | None:
+    """Run the transcription in the Python that has faster-whisper."""
+    import json
+    import subprocess
+    import sys as _sys
+
+    if not Path(WHISPER_PYTHON).exists():
+        logger.warning("no faster-whisper interpreter found at %s",
+                       WHISPER_PYTHON)
+        return None
+    helper = (
+        "import json,sys\n"
+        "from faster_whisper import WhisperModel\n"
+        "m = WhisperModel(sys.argv[2], device='cpu', compute_type='int8')\n"
+        "segs, info = m.transcribe(sys.argv[1], language='hi', beam_size=5,\n"
+        "                          vad_filter=True)\n"
+        "parts = [(s.text or '').strip() for s in segs]\n"
+        "parts = [p for p in parts if p]\n"
+        "print(json.dumps({'text': ' '.join(parts),\n"
+        "                  'segments': len(parts),\n"
+        "                  'language': getattr(info, 'language', 'hi')},\n"
+        "                 ensure_ascii=False))\n"
+    )
+    try:
+        env = dict(os.environ)
+        env["PYTHONIOENCODING"] = "utf-8"
+        proc = subprocess.run(
+            [WHISPER_PYTHON, "-c", helper, str(audio_path), model_size],
+            capture_output=True, timeout=1800, env=env)
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("local transcription failed to start: %s", exc)
+        return None
+    if proc.returncode != 0:
+        stderr = (proc.stderr or b"").decode("utf-8", "replace")
+        logger.warning("local transcription failed: %s", stderr[-400:])
+        return None
+    # The child writes UTF-8 Hindi. Decoding with the parent's default
+    # (cp1252 on Windows) mangles it and breaks the JSON, so the bytes
+    # are decoded explicitly.
+    stdout = (proc.stdout or b"").decode("utf-8", "replace")
+    try:
+        data = json.loads(stdout.strip().splitlines()[-1])
+    except Exception:  # noqa: BLE001
+        logger.warning("could not read the transcription output: %s",
+                       stdout[-200:])
+        return None
+    text = (data.get("text") or "").strip()
+    if not text:
+        return None
+    return {"text": text, "segments": data.get("segments", 0),
+            "language": data.get("language", "hi"),
             "method": "whisper_local",
             "model": f"faster-whisper/{model_size}"}
 
